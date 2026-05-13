@@ -1,6 +1,6 @@
 # StockSense AI — LSTM Stock Price Prediction
 
-A deployed web app that brings your LSTM stock prediction notebook to life, powered by Flask + Claude claude-sonnet-4-20250514.
+A deployed web app that brings your LSTM stock prediction notebook to life.
 
 ## What it does
 - Accepts any stock ticker + optional OHLCV data
