@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockSense AI — LSTM Price Prediction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0c10;--bg2:#111318;--bg3:#181b22;--bg4:#1f232d;
+  --border:#2a2f3d;--border2:#343a4d;
+  --text:#e8eaf0;--text2:#8b90a0;--text3:#555b6d;
+  --green:#22c55e;--green-bg:rgba(34,197,94,.08);
+  --red:#ef4444;--red-bg:rgba(239,68,68,.08);
+  --amber:#f59e0b;--amber-bg:rgba(245,158,11,.08);
+  --accent:#818cf8;--accent2:#6366f1;--accent-bg:rgba(129,140,248,.1);
+  --mono:'Space Mono',monospace;
+  --sans:'DM Sans',sans-serif;
+  --r:10px;--r2:16px;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;line-height:1.6}
+
+header{border-bottom:1px solid var(--border);background:var(--bg2);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;z-index:100}
+.logo{font-family:var(--mono);font-size:15px;font-weight:700;display:flex;align-items:center;gap:10px}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(129,140,248,.5)}50%{box-shadow:0 0 0 6px rgba(129,140,248,0)}}
+.badge{font-size:10px;font-family:var(--mono);background:var(--green-bg);color:var(--green);border:1px solid rgba(34,197,94,.2);padding:2px 8px;border-radius:20px}
+
+.layout{display:grid;grid-template-columns:310px 1fr;height:calc(100vh - 60px)}
+.sidebar{border-right:1px solid var(--border);background:var(--bg2);overflow-y:auto;display:flex;flex-direction:column}
+.main{overflow-y:auto}
+
+.sec{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border)}
+.sec:last-child{border:none;flex:1}
+.sec-lbl{font-size:11px;font-family:var(--mono);color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px}
+
+.ticker-row{display:flex;gap:8px}
+.ticker-inp{flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:10px 14px;border-radius:var(--r);font-family:var(--mono);font-size:18px;font-weight:700;letter-spacing:2px;text-transform:uppercase;outline:none;transition:border-color .2s;min-width:0}
+.ticker-inp::placeholder{color:var(--text3);font-size:13px;letter-spacing:0;font-weight:400;font-family:var(--sans)}
+.ticker-inp:focus{border-color:var(--accent)}
+.btn-go{background:var(--accent2);border:none;color:#fff;padding:10px 18px;border-radius:var(--r);font-family:var(--sans);font-weight:600;font-size:14px;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.btn-go:hover{background:var(--accent)}
+.btn-go:disabled{opacity:.45;cursor:not-allowed}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:4px 12px;border-radius:20px;font-size:12px;font-family:var(--mono);cursor:pointer;transition:all .2s}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+
+.ohlcv-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fld{display:flex;flex-direction:column;gap:4px}
+.fld-lbl{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.fld-inp{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;font-size:14px;font-family:var(--mono);outline:none;width:100%;transition:border-color .2s}
+.fld-inp:focus{border-color:var(--accent)}
+.full{grid-column:1/-1}
+
+.param-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.param-lbl{font-size:13px;color:var(--text2)}
+.param-ctrl{display:flex;align-items:center;gap:8px}
+.param-v{font-family:var(--mono);font-size:13px;color:var(--accent);min-width:36px;text-align:right}
+input[type=range]{accent-color:var(--accent);width:80px;cursor:pointer}
+select{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px;font-family:var(--sans);outline:none;cursor:pointer}
+
+/* Main content states */
+.state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:1rem;text-align:center;padding:2rem;min-height:400px}
+.state-icon{font-size:52px;opacity:.18}
+.state-title{font-size:20px;font-weight:500}
+.state-sub{font-size:14px;color:var(--text2);max-width:340px;line-height:1.65}
+
+.spinner{width:48px;height:48px;border-radius:50%;border:2px solid var(--border2);border-top-color:var(--accent);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin-txt{font-family:var(--mono);font-size:12px;color:var(--text3);margin-top:.5rem}
+
+/* Results */
+.results{padding:1.75rem 2rem 3rem;max-width:880px}
+.res-hdr{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:.25rem}
+.res-ticker{font-family:var(--mono);font-size:34px;font-weight:700;letter-spacing:-1px}
+.res-ts{font-size:12px;color:var(--text3);font-family:var(--mono);margin-bottom:1.5rem}
+
+.sig-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:600;font-family:var(--mono)}
+.sig-buy{background:var(--green-bg);color:var(--green);border:1px solid rgba(34,197,94,.25)}
+.sig-sell{background:var(--red-bg);color:var(--red);border:1px solid rgba(239,68,68,.25)}
+.sig-hold{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,158,11,.25)}
+
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.5rem}
+.mc{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:1rem}
+.mc-lbl{font-size:11px;color:var(--text3);font-family:var(--mono);letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px}
+.mc-val{font-family:var(--mono);font-size:22px;font-weight:700}
+.mc-sub{font-size:12px;color:var(--text3);margin-top:3px}
+.pos{color:var(--green)}.neg{color:var(--red)}.acc{color:var(--accent)}
+
+.chart-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:1.25rem 1.5rem;margin-bottom:1.5rem}
+.chart-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.chart-title{font-size:13px;font-weight:500;color:var(--text2)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.5rem}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem}
+.card.full{grid-column:1/-1}
+.card-lbl{font-size:11px;font-family:var(--mono);color:var(--text3);letter-spacing:.5px;text-transform:uppercase;margin-bottom:.75rem}
+
+.pred-row{display:flex;align-items:baseline;gap:10px;margin:.5rem 0}
+.pred-per{font-size:12px;color:var(--text3);font-family:var(--mono);min-width:55px}
+.pred-px{font-size:18px;font-weight:700;font-family:var(--mono)}
+.pred-pct{font-size:12px;padding:2px 8px;border-radius:4px}
+.pct-pos{background:var(--green-bg);color:var(--green)}
+.pct-neg{background:var(--red-bg);color:var(--red)}
+
+.risk-bar{height:6px;border-radius:3px;background:var(--bg3);margin:8px 0;overflow:hidden}
+.risk-fill{height:100%;border-radius:3px;transition:width 1s ease}
+
+.ind-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ind{background:var(--bg3);border-radius:8px;padding:.75rem;border:1px solid var(--border)}
+.ind-name{font-size:11px;color:var(--text3);font-family:var(--mono);margin-bottom:4px}
+.ind-val{font-size:16px;font-weight:700;font-family:var(--mono)}
+.ind-sig{font-size:11px;margin-top:3px}
+.bull{color:var(--green)}.bear{color:var(--red)}.neu{color:var(--amber)}
+
+.analysis-txt{font-size:14px;color:var(--text2);line-height:1.75}
+.lstm-quote{margin-top:10px;padding:10px 14px;background:var(--accent-bg);border-left:3px solid var(--accent);border-radius:0 8px 8px 0;font-size:13px;color:var(--text2)}
+
+.disclaimer{font-size:11px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;line-height:1.65;margin-top:1rem}
+.err-box{background:var(--red-bg);border:1px solid rgba(239,68,68,.3);color:var(--red);padding:1rem 1.25rem;border-radius:var(--r);font-size:14px}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><div class="logo-dot"></div>STOCKSENSE<span style="color:var(--text3)">_AI</span></div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="badge">● LSTM · LIVE</span>
+    <span style="font-size:12px;color:var(--text3);font-family:var(--mono)">Powered by Claude claude-sonnet-4-20250514</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sec">
+      <div class="sec-lbl">Ticker Symbol</div>
+      <div class="ticker-row">
+        <input class="ticker-inp" id="ticker" type="text" placeholder="AAPL" maxlength="6" autofocus>
+        <button class="btn-go" id="analyzeBtn" onclick="analyze()">Analyze ↗</button>
+      </div>
+      <div class="chips">
+        <span class="chip" onclick="pick('AAPL')">AAPL</span>
+        <span class="chip" onclick="pick('TSLA')">TSLA</span>
+        <span class="chip" onclick="pick('MSFT')">MSFT</span>
+        <span class="chip" onclick="pick('NVDA')">NVDA</span>
+        <span class="chip" onclick="pick('GOOGL')">GOOGL</span>
+        <span class="chip" onclick="pick('AMZN')">AMZN</span>
+        <span class="chip" onclick="pick('META')">META</span>
+        <span class="chip" onclick="pick('BTC-USD')">BTC</span>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-lbl">OHLCV Data <span style="color:var(--text3);font-size:10px">(optional)</span></div>
+      <div class="ohlcv-grid">
+        <div class="fld"><span class="fld-lbl">OPEN</span><input class="fld-inp" id="o" type="number" step="0.01" placeholder="183.20"></div>
+        <div class="fld"><span class="fld-lbl">HIGH</span><input class="fld-inp" id="h" type="number" step="0.01" placeholder="185.40"></div>
+        <div class="fld"><span class="fld-lbl">LOW</span><input class="fld-inp" id="l" type="number" step="0.01" placeholder="181.90"></div>
+        <div class="fld"><span class="fld-lbl">CLOSE</span><input class="fld-inp" id="c" type="number" step="0.01" placeholder="184.10"></div>
+        <div class="fld full"><span class="fld-lbl">VOLUME</span><input class="fld-inp" id="v" type="number" placeholder="58420000"></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-lbl">Model Parameters</div>
+      <div class="param-row">
+        <span class="param-lbl">Window Size</span>
+        <div class="param-ctrl">
+          <input type="range" min="20" max="120" value="60" step="10" oninput="this.nextElementSibling.textContent=this.value" id="window">
+          <span class="param-v" id="wv">60</span>
+        </div>
+      </div>
+      <div class="param-row">
+        <span class="param-lbl">LSTM Layers</span>
+        <div class="param-ctrl">
+          <input type="range" min="1" max="4" value="2" step="1" oninput="this.nextElementSibling.textContent=this.value" id="layers">
+          <span class="param-v">2</span>
+        </div>
+      </div>
+      <div class="param-row">
+        <span class="param-lbl">Dropout</span>
+        <div class="param-ctrl">
+          <input type="range" min="0" max="50" value="20" step="5" oninput="this.nextElementSibling.textContent=this.value+'%'" id="dropout">
+          <span class="param-v">20%</span>
+        </div>
+      </div>
+      <div class="param-row">
+        <span class="param-lbl">Horizon</span>
+        <div class="param-ctrl">
+          <select id="horizon"><option>1 Day</option><option selected>7 Days</option><option>30 Days</option><option>90 Days</option></select>
+        </div>
+      </div>
+      <div class="param-row">
+        <span class="param-lbl">Sentiment</span>
+        <div class="param-ctrl">
+          <select id="sentiment"><option>Bullish</option><option selected>Neutral</option><option>Bearish</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec" style="flex:1;display:flex;align-items:flex-end">
+      <p style="font-size:11px;color:var(--text3);line-height:1.6">
+        This tool simulates the LSTM pipeline from your notebook using AI analysis. Results are educational — not financial advice.
+      </p>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main" id="main">
+    <div class="state">
+      <div class="state-icon">📈</div>
+      <div class="state-title">Enter a ticker to begin</div>
+      <div class="state-sub">Input any stock symbol, optionally add OHLCV data, and hit Analyze to run the LSTM prediction pipeline.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let chart = null;
+
+function pick(t) {
+  document.getElementById('ticker').value = t;
+}
+
+document.getElementById('ticker').addEventListener('keydown', e => {
+  if (e.key === 'Enter') analyze();
+});
+
+document.getElementById('window').addEventListener('input', function() {
+  document.getElementById('wv').textContent = this.value;
+});
+
+async function analyze() {
+  const ticker = document.getElementById('ticker').value.trim().toUpperCase();
+  if (!ticker) { alert('Please enter a ticker symbol.'); return; }
+
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true; btn.textContent = 'Running...';
+
+  document.getElementById('main').innerHTML = `
+    <div class="state">
+      <div class="spinner"></div>
+      <div class="spin-txt">RUNNING LSTM ANALYSIS FOR ${ticker}...</div>
+    </div>`;
+
+  const payload = {
+    ticker,
+    ohlcv: {
+      open:  document.getElementById('o').value,
+      high:  document.getElementById('h').value,
+      low:   document.getElementById('l').value,
+      close: document.getElementById('c').value,
+      volume: document.getElementById('v').value
+    },
+    params: {
+      window:    document.getElementById('window').value,
+      layers:    document.getElementById('layers').value,
+      dropout:   document.getElementById('dropout').value,
+      horizon:   document.getElementById('horizon').value,
+      sentiment: document.getElementById('sentiment').value
+    }
+  };
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    render(data);
+  } catch(e) {
+    document.getElementById('main').innerHTML =
+      `<div style="padding:2rem"><div class="err-box">⚠ ${e.message}</div></div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Analyze ↗';
+  }
+}
+
+function pct(p, base) { return (((p - base) / base) * 100).toFixed(2); }
+function pctStr(p, base) { const v = pct(p, base); return (v >= 0 ? '+' : '') + v + '%'; }
+function pctCls(p, base) { return p >= base ? 'pct-pos' : 'pct-neg'; }
+
+function render(r) {
+  const cp = r.currentPrice;
+  const sc = r.signal === 'BUY' ? 'sig-buy' : r.signal === 'SELL' ? 'sig-sell' : 'sig-hold';
+  const sha = r.metrics.sharpeRatio;
+  const shc = sha >= 1 ? 'pos' : sha >= 0 ? 'acc' : 'neg';
+  const riskColor = r.riskScore >= 7 ? '#ef4444' : r.riskScore >= 4 ? '#f59e0b' : '#22c55e';
+
+  const ti = r.technicalIndicators;
+  const rsiCls = ti.rsiSignal === 'overbought' ? 'bear' : ti.rsiSignal === 'oversold' ? 'bull' : 'neu';
+  const macdCls = ti.macdSignal === 'bullish' ? 'bull' : 'bear';
+  const maCls = ti.ma_cross === 'golden_cross' ? 'bull' : ti.ma_cross === 'death_cross' ? 'bear' : 'neu';
+  const bollCls = ti.bollingerPosition === 'upper' ? 'bear' : ti.bollingerPosition === 'lower' ? 'bull' : 'neu';
+  const bollLbl = ti.bollingerPosition === 'upper' ? 'Upper Band' : ti.bollingerPosition === 'lower' ? 'Lower Band' : 'Mid Band';
+  const maLbl = ti.ma_cross.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  const p = r.predictions;
+
+  document.getElementById('main').innerHTML = `
+  <div class="results">
+    <div class="res-hdr">
+      <span class="res-ticker">${r.ticker}</span>
+      <span class="sig-badge ${sc}">${r.signal} · ${r.confidence}% CONF</span>
+    </div>
+    <div class="res-ts">LSTM Analysis · ${new Date().toLocaleString()} · ${document.getElementById('horizon').value} Horizon</div>
+
+    <div class="metrics">
+      <div class="mc"><div class="mc-lbl">Price</div><div class="mc-val acc">$${cp.toFixed(2)}</div><div class="mc-sub">Market ref</div></div>
+      <div class="mc"><div class="mc-lbl">Dir. Accuracy</div><div class="mc-val pos">${r.metrics.directionalAccuracy.toFixed(1)}%</div><div class="mc-sub">Backtest</div></div>
+      <div class="mc"><div class="mc-lbl">RMSE</div><div class="mc-val acc">${r.metrics.rmse.toFixed(3)}</div><div class="mc-sub">MAE: ${r.metrics.mae.toFixed(3)}</div></div>
+      <div class="mc"><div class="mc-lbl">Sharpe</div><div class="mc-val ${shc}">${sha.toFixed(2)}</div><div class="mc-sub">Risk-adj return</div></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-hdr">
+        <span class="chart-title">30-Day Price History · LSTM Forecast</span>
+        <span style="font-size:12px;color:var(--text3);font-family:var(--mono)">window=${document.getElementById('window').value}d · ${document.getElementById('layers').value}L</span>
+      </div>
+      <div style="position:relative;width:100%;height:220px">
+        <canvas id="priceChart" role="img" aria-label="Price history and LSTM forecast for ${r.ticker}">30-day price history and 1-day forecast for ${r.ticker}.</canvas>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <div class="card-lbl">Price Targets</div>
+        <div class="pred-row"><span class="pred-per">1 Day</span><span class="pred-px">$${p['1d'].toFixed(2)}</span><span class="pred-pct ${pctCls(p['1d'],cp)}">${pctStr(p['1d'],cp)}</span></div>
+        <div class="pred-row"><span class="pred-per">7 Days</span><span class="pred-px">$${p['7d'].toFixed(2)}</span><span class="pred-pct ${pctCls(p['7d'],cp)}">${pctStr(p['7d'],cp)}</span></div>
+        <div class="pred-row"><span class="pred-per">30 Days</span><span class="pred-px">$${p['30d'].toFixed(2)}</span><span class="pred-pct ${pctCls(p['30d'],cp)}">${pctStr(p['30d'],cp)}</span></div>
+        <div class="pred-row"><span class="pred-per">90 Days</span><span class="pred-px">$${p['90d'].toFixed(2)}</span><span class="pred-pct ${pctCls(p['90d'],cp)}">${pctStr(p['90d'],cp)}</span></div>
+      </div>
+      <div class="card">
+        <div class="card-lbl">Risk Assessment</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:13px;color:var(--text2)">Risk Score</span><span style="font-family:var(--mono);font-size:13px;color:${riskColor}">${r.riskScore}/10</span></div>
+        <div class="risk-bar"><div class="risk-fill" style="width:${r.riskScore*10}%;background:${riskColor}"></div></div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Volatility: <strong style="color:var(--text)">${r.volatility}</strong></div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.6"><strong style="color:var(--text)">Bull:</strong> ${r.analysis.bullCase}</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-top:8px"><strong style="color:var(--text)">Bear:</strong> ${r.analysis.bearCase}</div>
+      </div>
+
+      <div class="card full">
+        <div class="card-lbl">Technical Indicators</div>
+        <div class="ind-grid">
+          <div class="ind"><div class="ind-name">RSI (14)</div><div class="ind-val ${rsiCls}">${ti.rsi.toFixed(1)}</div><div class="ind-sig ${rsiCls}">${ti.rsiSignal.charAt(0).toUpperCase()+ti.rsiSignal.slice(1)}</div></div>
+          <div class="ind"><div class="ind-name">MACD</div><div class="ind-val ${macdCls}">${ti.macd >= 0 ? '+':''}${ti.macd.toFixed(2)}</div><div class="ind-sig ${macdCls}">${ti.macdSignal.charAt(0).toUpperCase()+ti.macdSignal.slice(1)}</div></div>
+          <div class="ind"><div class="ind-name">Bollinger</div><div class="ind-val" style="font-size:13px;color:var(--text)">${ti.bollingerPosition.charAt(0).toUpperCase()+ti.bollingerPosition.slice(1)}</div><div class="ind-sig ${bollCls}">${bollLbl}</div></div>
+          <div class="ind"><div class="ind-name">MA 50</div><div class="ind-val" style="color:var(--text)">$${ti.movingAvg50.toFixed(2)}</div><div class="ind-sig ${cp>=ti.movingAvg50?'bull':'bear'}">${cp>=ti.movingAvg50?'Above':'Below'}</div></div>
+          <div class="ind"><div class="ind-name">MA 200</div><div class="ind-val" style="color:var(--text)">$${ti.movingAvg200.toFixed(2)}</div><div class="ind-sig ${cp>=ti.movingAvg200?'bull':'bear'}">${cp>=ti.movingAvg200?'Above':'Below'}</div></div>
+          <div class="ind"><div class="ind-name">MA Cross</div><div class="ind-val" style="font-size:12px;color:var(--text)">${maLbl}</div><div class="ind-sig ${maCls}">${maCls==='bull'?'Bullish':maCls==='bear'?'Bearish':'Neutral'}</div></div>
+        </div>
+      </div>
+
+      <div class="card full">
+        <div class="card-lbl">AI Analysis</div>
+        <div class="analysis-txt">
+          <p>${r.analysis.summary}</p>
+          <div class="lstm-quote">${r.analysis.lstmInsight}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="disclaimer">⚠ Educational use only. AI-generated analysis is not financial advice. LSTM outputs are simulated. Past patterns do not guarantee future returns. Always consult a qualified financial advisor before investing.</div>
+  </div>`;
+
+  // Draw chart
+  setTimeout(() => {
+    const ctx = document.getElementById('priceChart');
+    if (!ctx) return;
+    if (chart) { chart.destroy(); }
+
+    const hist = (r.priceHistory || []).slice(-30);
+    const labels = [];
+    const now = new Date();
+    for (let i = hist.length; i >= 0; i--) {
+      const d = new Date(now); d.setDate(now.getDate() - i);
+      labels.push(d.toLocaleDateString('en-US',{month:'short',day:'numeric'}));
+    }
+    labels.push('1D →');
+
+    const histData = [...hist, cp, null];
+    const fcastData = new Array(hist.length).fill(null).concat([cp, p['1d']]);
+    const forecastColor = p['1d'] >= cp ? '#22c55e' : '#ef4444';
+
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {label:'Historical',data:histData,borderColor:'#818cf8',backgroundColor:'rgba(129,140,248,.07)',borderWidth:2,pointRadius:0,pointHoverRadius:3,fill:true,tension:0.3,spanGaps:false},
+          {label:'LSTM Forecast',data:fcastData,borderColor:forecastColor,backgroundColor:'transparent',borderWidth:2.5,borderDash:[5,4],pointRadius:[...new Array(hist.length+1).fill(0),6],pointBackgroundColor:forecastColor,fill:false,tension:0.2,spanGaps:false}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        interaction:{intersect:false,mode:'index'},
+        plugins:{legend:{display:false},tooltip:{backgroundColor:'#1f232d',borderColor:'#2a2f3d',borderWidth:1,titleColor:'#8b90a0',bodyColor:'#e8eaf0',callbacks:{label:ctx=>' $'+(ctx.parsed.y?.toFixed(2)??'')}}},
+        scales:{
+          x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#555b6d',font:{family:'Space Mono',size:10},maxTicksLimit:8,maxRotation:0}},
+          y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#555b6d',font:{family:'Space Mono',size:10},callback:v=>'$'+v.toFixed(0)},position:'right'}
+        }
+      }
+    });
+  }, 80);
+}
+</script>
+</body>
+</html>

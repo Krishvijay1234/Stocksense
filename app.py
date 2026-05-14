@@ -1,85 +1,97 @@
-import os
-import json
-from flask import Flask, request, jsonify, render_template
-from anthropic import Anthropic
+# StockSense AI — LSTM Stock Price Prediction
 
-app = Flask(__name__)
-client = Anthropic()  # reads ANTHROPIC_API_KEY from environment
+A deployed web app that brings your LSTM stock prediction notebook to life, powered by Flask + Claude claude-sonnet-4-20250514.
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+## What it does
+- Accepts any stock ticker + optional OHLCV data
+- Simulates your LSTM pipeline (window size, layers, dropout, horizon)
+- Returns price targets (1D / 7D / 30D / 90D), technical indicators, risk score, and AI analysis
+- Displays a 30-day price history chart with LSTM forecast overlay
 
-@app.route("/api/analyze", methods=["POST"])
-def analyze():
-    data = request.get_json()
-    ticker   = data.get("ticker", "").strip().upper()
-    ohlcv    = data.get("ohlcv", {})
-    params   = data.get("params", {})
+---
 
-    if not ticker:
-        return jsonify({"error": "Ticker is required"}), 400
+## Project Structure
+```
+stocksense/
+├── app.py              # Flask backend + Anthropic API call
+├── templates/
+│   └── index.html      # Full frontend (single-file, no build step)
+├── requirements.txt
+├── Procfile            # For Heroku / Render / Railway
+└── README.md
+```
 
-    has_ohlcv = all(ohlcv.get(k) for k in ["open", "high", "low", "close"])
-    ohlcv_text = (
-        f"User-provided OHLCV — Open: {ohlcv['open']}, High: {ohlcv['high']}, "
-        f"Low: {ohlcv['low']}, Close: {ohlcv['close']}, Volume: {ohlcv.get('volume', 'N/A')}"
-        if has_ohlcv
-        else f"No OHLCV data provided — use realistic market estimates for {ticker}."
-    )
+---
 
-    prompt = f"""You are an expert quantitative analyst and ML engineer specialising in LSTM-based stock price prediction.
+## Local Development
 
-Analyse "{ticker}" with these parameters:
-{ohlcv_text}
-Model: {params.get('layers', 2)}-layer LSTM, window={params.get('window', 60)} days, dropout={params.get('dropout', 20)}%, horizon={params.get('horizon', '7 Days')}
-Market sentiment: {params.get('sentiment', 'Neutral')}
+### 1. Install dependencies
+```bash
+pip install -r requirements.txt
+```
 
-Reply with ONLY a valid JSON object — no markdown fences, no commentary:
-{{
-  "ticker": "{ticker}",
-  "currentPrice": <realistic number>,
-  "signal": "BUY" | "HOLD" | "SELL",
-  "confidence": <50-95>,
-  "predictions": {{"1d": <price>, "7d": <price>, "30d": <price>, "90d": <price>}},
-  "metrics": {{"mae": <0.01-5.0>, "rmse": <0.01-8.0>, "directionalAccuracy": <55-90>, "sharpeRatio": <-1.0 to 2.5>}},
-  "technicalIndicators": {{
-    "rsi": <20-80>, "rsiSignal": "overbought"|"oversold"|"neutral",
-    "macd": <number>, "macdSignal": "bullish"|"bearish",
-    "bollingerPosition": "upper"|"middle"|"lower",
-    "movingAvg50": <price>, "movingAvg200": <price>,
-    "ma_cross": "golden_cross"|"death_cross"|"none"
-  }},
-  "riskScore": <1-10>,
-  "volatility": "low"|"moderate"|"high"|"extreme",
-  "analysis": {{
-    "summary": "<2-3 sentences on current situation and LSTM rationale>",
-    "bullCase": "<1-2 sentences>",
-    "bearCase": "<1-2 sentences>",
-    "lstmInsight": "<1-2 sentences on what the model finds in price sequence patterns>"
-  }},
-  "priceHistory": [<30 realistic daily close prices, oldest first, ending near currentPrice>]
-}}"""
+### 2. Set your Anthropic API key
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
 
-    try:
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1200,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = message.content[0].text.strip()
-        # Strip accidental markdown fences
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        result = json.loads(raw.strip())
-        return jsonify(result)
-    except json.JSONDecodeError as e:
-        return jsonify({"error": f"Failed to parse AI response: {str(e)}"}), 500
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+### 3. Run the server
+```bash
+python app.py
+```
+Visit http://localhost:5000
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+---
+
+## Deploy to Render (recommended — free tier)
+
+1. Push this folder to a GitHub repo
+2. Go to https://render.com → New → Web Service
+3. Connect your repo
+4. Set:
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `gunicorn app:app`
+5. Add environment variable:
+   - `ANTHROPIC_API_KEY` = your key
+6. Click **Deploy**
+
+---
+
+## Deploy to Railway
+
+1. Push to GitHub
+2. Go to https://railway.app → New Project → Deploy from GitHub
+3. Add environment variable: `ANTHROPIC_API_KEY`
+4. Railway auto-detects the Procfile — deploy runs automatically
+
+---
+
+## Deploy to Heroku
+
+```bash
+heroku create stocksense-ai
+heroku config:set ANTHROPIC_API_KEY=sk-ant-...
+git push heroku main
+```
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | ✅ | Your Anthropic API key (get at console.anthropic.com) |
+| `PORT` | optional | Port to listen on (default 5000) |
+
+---
+
+## How it maps to your notebook
+
+| Notebook Step | App Equivalent |
+|---|---|
+| `kagglehub` download + CSV load | User inputs ticker + OHLCV |
+| `MinMaxScaler` + sliding window | Sent as params to Claude for simulation |
+| LSTM model (64u × 2 layers) | Configurable in sidebar |
+| `model.fit` (20 epochs) | AI generates realistic metrics |
+| MAE / RMSE / Directional Accuracy | Displayed in metric cards |
+| `plt.plot(predicted, actual)` | Interactive Chart.js price chart |
