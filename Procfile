@@ -1,1 +1,1 @@
-web: gunicorn app:stocksense
+web: gunicorn app:app
