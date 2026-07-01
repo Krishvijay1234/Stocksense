@@ -1,3 +1,0 @@
-flask>=3.0.0
-anthropic>=0.25.0
-gunicorn>=21.0.0
