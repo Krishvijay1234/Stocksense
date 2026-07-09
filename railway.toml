@@ -1,5 +1,6 @@
 [build]
-buildCommand = "pip install -r requirements.txt && npm --prefix frontend install && npm --prefix frontend run build"
+buildCommand = "pip install -r requirements.txt && rm -rf frontend/node_modules && npm --prefix frontend install && npm --prefix frontend run build"
 
 [deploy]
 startCommand = "gunicorn --bind 0.0.0.0:$PORT backend_app:app"
+
