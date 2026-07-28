@@ -5,8 +5,8 @@ cd /d "%~dp0"
 SET "ROOT_DIR=%~dp0"
 SET "LOGFILE=%ROOT_DIR%stocksense_backend.log"
 
-IF EXIST "%ROOT_DIR%New folder\flask_backend.py" (
-  SET "BACKEND_SCRIPT=%ROOT_DIR%New folder\flask_backend.py"
+IF EXIST "%ROOT_DIR%backend\flask_backend.py" (
+  SET "BACKEND_SCRIPT=%ROOT_DIR%backend\flask_backend.py"
 ) ELSE (
   SET "BACKEND_SCRIPT=%ROOT_DIR%flask_backend.py"
 )
